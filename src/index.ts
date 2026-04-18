@@ -12,6 +12,10 @@ const corsHeaders = {
 
 export default {
 	async fetch(request: Request, env: Env): Promise<Response> {
+    if (request.method === "OPTIONS") {
+      return new Response(null, { status: 204, headers: corsHeaders });
+    }
+
 		if (request.method !== "POST") {
       return new Response("Method not allowed", { status: 405, headers: corsHeaders });
     }
