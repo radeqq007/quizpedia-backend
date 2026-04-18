@@ -13,7 +13,7 @@ const corsHeaders = {
 export default {
 	async fetch(request: Request, env: Env): Promise<Response> {
 		if (request.method !== "POST") {
-      return new Response("Method not allowed", { status: 405 });
+      return new Response("Method not allowed", { status: 405, headers: corsHeaders });
     }
 
 		const { articleContent, articleTitle } = await request.json<{
