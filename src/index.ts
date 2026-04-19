@@ -1,5 +1,6 @@
 export interface Env {
 	GROQ_API_KEY: string;
+  RATE_LIMITER: RateLimit;
 }
 
 const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
@@ -16,6 +17,16 @@ export default {
       return new Response(null, { status: 204, headers: corsHeaders });
     }
 
+    const ip = request.headers.get("cf-connecting-ip") ?? "unkown";
+    const { success } = await env.RATE_LIMITER.limit({ key: ip });
+
+    if (!success) {
+      return new Response(
+        JSON.stringify({ error: "Rate limit exceeded. Try again later." }),
+        { status: 429, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
+    
 		if (request.method !== "POST") {
       return new Response("Method not allowed", { status: 405, headers: corsHeaders });
     }
