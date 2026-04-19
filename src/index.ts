@@ -1,47 +1,56 @@
 export interface Env {
 	GROQ_API_KEY: string;
-  RATE_LIMITER: RateLimit;
+	RATE_LIMITER: RateLimit;
 }
 
 const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
 
 const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type",
+	"Access-Control-Allow-Origin": "*",
+	"Access-Control-Allow-Methods": "POST, OPTIONS",
+	"Access-Control-Allow-Headers": "Content-Type",
 };
 
 export default {
 	async fetch(request: Request, env: Env): Promise<Response> {
-    if (request.method === "OPTIONS") {
-      return new Response(null, { status: 204, headers: corsHeaders });
-    }
+		if (request.method === "OPTIONS") {
+			return new Response(null, { status: 204, headers: corsHeaders });
+		}
 
-    const ip = request.headers.get("cf-connecting-ip") ?? "unkown";
-    const { success } = await env.RATE_LIMITER.limit({ key: ip });
+		const ip = request.headers.get("cf-connecting-ip") ?? "unkown";
+		const { success } = await env.RATE_LIMITER.limit({ key: ip });
 
-    if (!success) {
-      return new Response(
-        JSON.stringify({ error: "Rate limit exceeded. Try again later." }),
-        { status: 429, headers: { "Content-Type": "application/json", ...corsHeaders } }
-      );
-    }
-    
+		if (!success) {
+			return new Response(
+				JSON.stringify({ error: "Rate limit exceeded. Try again later." }),
+				{
+					status: 429,
+					headers: { "Content-Type": "application/json", ...corsHeaders },
+				},
+			);
+		}
+
 		if (request.method !== "POST") {
-      return new Response("Method not allowed", { status: 405, headers: corsHeaders });
-    }
+			return new Response("Method not allowed", {
+				status: 405,
+				headers: corsHeaders,
+			});
+		}
 
 		const { articleContent, articleTitle } = await request.json<{
-      articleContent: string;
-      articleTitle: string;
-    }>();
+			articleContent: string;
+			articleTitle: string;
+		}>();
 
 		if (!articleContent || !articleTitle) {
-      return new Response(
-        JSON.stringify({ error: "Missing articleContent or articleTitle" }),
-        { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
-      );
-    }
+			return new Response(
+				JSON.stringify({ error: "Missing articleContent or articleTitle" }),
+				{
+					status: 400,
+					headers: { "Content-Type": "application/json", ...corsHeaders },
+				},
+			);
+		}
 
 		const prompt = `You are a quiz generator. Given a Wikipedia article, return ONLY valid JSON with no markdown, no explanation.
 
@@ -69,41 +78,44 @@ ${articleContent.slice(0, 6000)}
     `;
 
 		const groqRes = await fetch(GROQ_API_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${env.GROQ_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: "llama-3.1-8b-instant",
-        messages: [{ role: "user", content: prompt }],
-        temperature: 0.5,
-      }),
-    });
+			method: "POST",
+			headers: {
+				"Content-Type": "application/json",
+				Authorization: `Bearer ${env.GROQ_API_KEY}`,
+			},
+			body: JSON.stringify({
+				model: "llama-3.1-8b-instant",
+				messages: [{ role: "user", content: prompt }],
+				temperature: 0.5,
+			}),
+		});
 
 		if (!groqRes.ok) {
-      const err = await groqRes.text();
-      return new Response(JSON.stringify({ error: err }), {
-        status: 502,
-        headers: { "Content-Type": "application/json", ...corsHeaders },
-      });
-    }
+			const err = await groqRes.text();
+			return new Response(JSON.stringify({ error: err }), {
+				status: 502,
+				headers: { "Content-Type": "application/json", ...corsHeaders },
+			});
+		}
 
-    const groqData = await groqRes.json<any>();
-    const cleaned = groqData.choices[0].message.content.trim();
+		const groqData = await groqRes.json<any>();
+		const cleaned = groqData.choices[0].message.content.trim();
 
 		let parsed: unknown;
-    try {
-      parsed = JSON.parse(cleaned);
-    } catch {
-      return new Response(
-        JSON.stringify({ error: "Model returned invalid JSON", cleaned }),
-        { status: 502, headers: { "Content-Type": "application/json", ...corsHeaders } }
-      );
-    }
+		try {
+			parsed = JSON.parse(cleaned);
+		} catch {
+			return new Response(
+				JSON.stringify({ error: "Model returned invalid JSON", cleaned }),
+				{
+					status: 502,
+					headers: { "Content-Type": "application/json", ...corsHeaders },
+				},
+			);
+		}
 
-    return new Response(JSON.stringify(parsed), {
-      headers: { "Content-Type": "application/json", ...corsHeaders },
-    });
-	}
-}
+		return new Response(JSON.stringify(parsed), {
+			headers: { "Content-Type": "application/json", ...corsHeaders },
+		});
+	},
+};
