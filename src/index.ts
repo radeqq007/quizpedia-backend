@@ -53,6 +53,7 @@ export default {
 		}
 
 		const prompt = `You are a quiz generator. Given a Wikipedia article, return ONLY valid JSON with no markdown, no explanation.
+The language of the summary and questions MUST match the language of the article.
 If the article is too short or has too little information to generate a quiz include "This topic might not generate a great quiz, try another one." in the summary.
 
 The JSON must follow this exact shape:
