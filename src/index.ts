@@ -55,6 +55,7 @@ export default {
 		const prompt = `You are a quiz generator. Given a Wikipedia article, return ONLY valid JSON with no markdown, no explanation.
 The language of the summary and questions MUST match the language of the article.
 If the article is too short or has too little information to generate a quiz include "This topic might not generate a great quiz, try another one." in the summary.
+The answers should be short and concise, not longer than 4 words.
 
 The JSON must follow this exact shape:
 {
@@ -73,6 +74,8 @@ Rules:
 - Each question has exactly 4 options
 - "answer" must be the exact text of the correct option (not A/B/C/D index)
 - No markdown fences, no extra keys
+- The language of the summary and questions matches the language of the article
+- Short and concise answers
 
 Article title: ${articleTitle}
 Article content (truncated to ~6000 chars):
