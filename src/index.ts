@@ -4,12 +4,44 @@ export interface Env {
 }
 
 const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
+const MODEL = "llama-3.1-8b-instant";
 
 const corsHeaders = {
 	"Access-Control-Allow-Origin": "*",
 	"Access-Control-Allow-Methods": "POST, OPTIONS",
 	"Access-Control-Allow-Headers": "Content-Type",
 };
+
+const callGroq = async (env: Env, prompt: string): Promise<string> => {
+	const res = await fetch(GROQ_API_URL, {
+		method: "POST",
+		headers: {
+			"Content-Type": "application/json",
+			Authorization: `Bearer ${env.GROQ_API_KEY}`,
+		},
+		body: JSON.stringify({
+			model: MODEL,
+			meessages: [{ role: "user", content: prompt }],
+			temperature: 0.5,
+		})
+	});
+
+	if (!res.ok) {
+		const err = await res.text();
+		throw new Error(err);
+	}
+
+	const data = await res.json<any>();
+	return data.choices[0].message.content.trim();
+}
+
+const jsonResponse = (body: unknown, status = 200): Response => {
+	return new Response(JSON.stringify(body), {
+		status,
+		headers: { "Content-Type": "application/json", ...corsHeaders },
+	});
+}
+
 
 export default {
 	async fetch(request: Request, env: Env): Promise<Response> {
@@ -19,15 +51,8 @@ export default {
 
 		const ip = request.headers.get("cf-connecting-ip") ?? "unkown";
 		const { success } = await env.RATE_LIMITER.limit({ key: ip });
-
 		if (!success) {
-			return new Response(
-				JSON.stringify({ error: "Rate limit exceeded. Try again later." }),
-				{
-					status: 429,
-					headers: { "Content-Type": "application/json", ...corsHeaders },
-				},
-			);
+			return jsonResponse({ error: "Rate limit exceeded. Try again later."}, 429);
 		}
 
 		if (request.method !== "POST") {
@@ -37,19 +62,14 @@ export default {
 			});
 		}
 
+
 		const { articleContent, articleTitle } = await request.json<{
 			articleContent: string;
 			articleTitle: string;
 		}>();
 
 		if (!articleContent || !articleTitle) {
-			return new Response(
-				JSON.stringify({ error: "Missing articleContent or articleTitle" }),
-				{
-					status: 400,
-					headers: { "Content-Type": "application/json", ...corsHeaders },
-				},
-			);
+			return jsonResponse({ error: "Missing articleContent or articleTitle" }, 400);
 		}
 
 		const prompt = `You are a quiz generator. Given a Wikipedia article, return ONLY valid JSON with no markdown, no explanation.
@@ -80,45 +100,14 @@ Article content (truncated to ~5500 chars):
 ${articleContent.slice(0, 5500)}
 `;
 
-		const groqRes = await fetch(GROQ_API_URL, {
-			method: "POST",
-			headers: {
-				"Content-Type": "application/json",
-				Authorization: `Bearer ${env.GROQ_API_KEY}`,
-			},
-			body: JSON.stringify({
-				model: "llama-3.1-8b-instant",
-				messages: [{ role: "user", content: prompt }],
-				temperature: 0.5,
-			}),
-		});
-
-		if (!groqRes.ok) {
-			const err = await groqRes.text();
-			return new Response(JSON.stringify({ error: err }), {
-				status: 502,
-				headers: { "Content-Type": "application/json", ...corsHeaders },
-			});
-		}
-
-		const groqData = await groqRes.json<any>();
-		const cleaned = groqData.choices[0].message.content.trim();
-
 		let parsed: unknown;
 		try {
-			parsed = JSON.parse(cleaned);
-		} catch {
-			return new Response(
-				JSON.stringify({ error: "Model returned invalid JSON", cleaned }),
-				{
-					status: 502,
-					headers: { "Content-Type": "application/json", ...corsHeaders },
-				},
-			);
+			const raw = await callGroq(env, prompt);
+			parsed = JSON.parse(raw);
+		} catch (err: any) {
+			return jsonResponse({ error: "Model returned invalid JSON", detail: err.message }, 502);
 		}
 
-		return new Response(JSON.stringify(parsed), {
-			headers: { "Content-Type": "application/json", ...corsHeaders },
-		});
+		return jsonResponse(parsed);
 	},
 };
