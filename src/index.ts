@@ -21,7 +21,7 @@ const callGroq = async (env: Env, prompt: string): Promise<string> => {
 		},
 		body: JSON.stringify({
 			model: MODEL,
-			meessages: [{ role: "user", content: prompt }],
+			messages: [{ role: "user", content: prompt }],
 			temperature: 0.5,
 		})
 	});
