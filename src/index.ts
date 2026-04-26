@@ -62,6 +62,34 @@ export default {
 			});
 		}
 
+		const url = new URL(request.url);
+
+		if (url.pathname === "/expand") {
+			const { articleContent, existingSummary } = await request.json<{
+				articleContent: string,
+				existingSummary: string,
+			}>();
+
+			if (!articleContent || !existingSummary) {
+				return jsonResponse({ error: "Missing articleContent or existingSummary" }, 400);
+			}
+
+			const prompt = `You are a summarization assistant. You will be given an existing summary and the original article. Expand the summary by adding 2-3 more sentences with additional detail from the article. Keep the language of the original summary. Return ONLY the expanded summary text, no markdown, no explanation, no JSON.
+
+Existing summary:
+${existingSummary}
+
+Article content (truncated to ~5500 chars):
+${articleContent.slice(0, 5500)}
+`;
+
+			try {
+				const expanded = await callGroq(env, prompt);
+				return jsonResponse({ summary: expanded });
+			} catch (err: any) {
+				return jsonResponse({ error: "Groq call failed", detail: err.message }, 500)
+			}
+		}
 
 		const { articleContent, articleTitle } = await request.json<{
 			articleContent: string;
